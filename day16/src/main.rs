@@ -177,6 +177,28 @@ fn part2(position_permutation: &DanceLine, name_permutation: &DanceLine) -> Danc
     return dance_line;
 }
 
+// Compute the final dance line by doubling the permutations each iteration and applying to the
+// current dance line as needed
+fn part2_exp(position_permutation: &DanceLine, name_permutation: &DanceLine) -> DanceLine {
+    let mut dance_line = initial_dance_line();
+    let mut exp_positon_permutation = *position_permutation;
+    let mut exp_name_permutation = *name_permutation;
+    let mut pow = 0x1;
+    loop {
+        if (pow & PART2_ITERATIONS) != 0 {
+            dance_line = apply_position_permutation(&dance_line, &exp_positon_permutation);
+            dance_line = apply_name_permutation(dance_line, &exp_name_permutation);
+        }
+        pow = pow << 1;
+        if pow > PART2_ITERATIONS {
+            break;
+        }
+        exp_positon_permutation = apply_position_permutation(&exp_positon_permutation, &exp_positon_permutation);
+        exp_name_permutation = apply_name_permutation(exp_name_permutation, &exp_name_permutation);
+    }
+    return dance_line;
+}
+
 fn indices_to_ascii(indices: DanceLine) -> [u8; NUM_DANCERS] {
     let mut result: [u8; NUM_DANCERS] = unsafe { mem::uninitialized() };
     for (ascii_char, &index) in result.iter_mut().zip(indices.iter()) {
@@ -230,6 +252,14 @@ fn main() {
         "Part 2: {} ({}s)",
         str::from_utf8(&indices_to_ascii(part2_result)).expect("Not utf8?"),
         duration_to_seconds(part2_duration)
+    );
+
+    let (part2_exp_result, part2_exp_duration) =
+        time_fn(|| part2_exp(&position_permutation, &name_permutation));
+    println!(
+        "Part 2 (Exponentiation method): {} ({}s)",
+        str::from_utf8(&indices_to_ascii(part2_exp_result)).expect("Not utf8?"),
+        duration_to_seconds(part2_exp_duration)
     );
 
     println!("Total: {}s", duration_to_seconds(start.elapsed()));
