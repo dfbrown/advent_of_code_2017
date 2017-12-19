@@ -207,17 +207,17 @@ fn indices_to_ascii(indices: DanceLine) -> [u8; NUM_DANCERS] {
     return result;
 }
 
-fn time_fn<F, T>(func: F) -> (T, time::Duration)
+fn time_fn<F, T>(func: F) -> (T, f32)
 where
     F: FnOnce() -> T,
 {
     let start = time::Instant::now();
     let result = func();
-    return (result, start.elapsed());
+    return (result, duration_to_milliseconds(start.elapsed()));
 }
 
-fn duration_to_seconds(t: time::Duration) -> f32 {
-    t.as_secs() as f32 + t.subsec_nanos() as f32 * 1.0e-9f32
+fn duration_to_milliseconds(t: time::Duration) -> f32 {
+    t.as_secs() as f32 * 1000.0f32 + t.subsec_nanos() as f32 * 1.0e-6f32
 }
 
 fn main() {
@@ -230,37 +230,38 @@ fn main() {
 
     let start = time::Instant::now();
 
-    let input = get_input();
+    let (input, read_duration) = time_fn(|| get_input());
+    println!("Read: {}ms", read_duration);
 
     let (dance_moves, parse_duration) = time_fn(|| dance_moves(&input).collect::<Vec<_>>());
-    println!("Parse: {}s", duration_to_seconds(parse_duration));
+    println!("Parse: {}ms", parse_duration);
 
     let ((position_permutation, name_permutation), reduce_duration) =
         time_fn(|| reduce_dance(dance_moves.iter().cloned()));
-    println!("Reduce: {}s", duration_to_seconds(reduce_duration));
+    println!("Reduce: {}ms", reduce_duration);
 
     let (part1_result, part1_duration) =
         time_fn(|| part1(&position_permutation, &name_permutation));
     println!(
-        "Part 1: {} ({}s)",
+        "Part 1: {} ({}ms)",
         str::from_utf8(&indices_to_ascii(part1_result)).expect("Not utf8?"),
-        duration_to_seconds(part1_duration)
+        part1_duration
     );
     let (part2_result, part2_duration) =
         time_fn(|| part2(&position_permutation, &name_permutation));
     println!(
-        "Part 2: {} ({}s)",
+        "Part 2: {} ({}ms)",
         str::from_utf8(&indices_to_ascii(part2_result)).expect("Not utf8?"),
-        duration_to_seconds(part2_duration)
+        part2_duration
     );
 
     let (part2_exp_result, part2_exp_duration) =
         time_fn(|| part2_exp(&position_permutation, &name_permutation));
     println!(
-        "Part 2 (Exponentiation method): {} ({}s)",
+        "Part 2 (Exponentiation method): {} ({}ms)",
         str::from_utf8(&indices_to_ascii(part2_exp_result)).expect("Not utf8?"),
-        duration_to_seconds(part2_exp_duration)
+        part2_exp_duration
     );
 
-    println!("Total: {}s", duration_to_seconds(start.elapsed()));
+    println!("Total: {}ms", duration_to_milliseconds(start.elapsed()));
 }
