@@ -1,10 +1,14 @@
+#![feature(test)]
+
 extern crate itertools;
+extern crate test;
 
 use std::fs::File;
 use std::io::prelude::*;
 use std::ops;
 use itertools::Itertools;
-use std::time;
+#[cfg(test)]
+use test::Bencher;
 
 type IntType = i32;
 
@@ -144,9 +148,12 @@ fn part1(positions: &[IntVec3], velocities: &[IntVec3], accelerations: &[IntVec3
         .0
 }
 
-fn is_square(v: IntType) -> bool {
+fn integer_sqrt(v: IntType) -> Option<i32> {
     let sqrt = (v as f64).sqrt();
-    return (sqrt * sqrt) as IntType == v;
+    if (sqrt * sqrt) as IntType == v {
+        return Some(sqrt as IntType);
+    }
+    return None;
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -177,12 +184,12 @@ fn solve_quadratic_positive(a: IntType, b: IntType, c: IntType) -> Intersections
             return Zero;
         }
     } else {
-        let sqrt_term = b * b - 4 * a * c;
-        if !is_square(sqrt_term) {
-            return Zero;
-        }
-        let numerator1 = -b + (sqrt_term as f64).sqrt() as IntType;
-        let numerator2 = -b - (sqrt_term as f64).sqrt() as IntType;
+        let sqrt_term = match integer_sqrt(b * b - 4 * a * c) {
+            None => { return Zero; }
+            Some(v) => v
+        };
+        let numerator1 = -b + sqrt_term;
+        let numerator2 = -b - sqrt_term;
         let denominator = 2 * a;
         let mut intersection1 = None;
         let mut intersection2 = None;
@@ -218,6 +225,8 @@ fn intersection_union(
 ) -> Intersections {
     use Intersections::*;
     match (intersections1, intersections2) {
+        (Zero, _) => Zero,
+        (_, Zero) => Zero,
         (Infinite, other) => other,
         (other, Infinite) => other,
         (One(i1), One(i2)) => if i1 == i2 { One(i1) } else { Zero },
@@ -243,8 +252,6 @@ fn intersection_union(
                 Zero
             }
         }
-        (Zero, _) => Zero,
-        (_, Zero) => Zero,
     }
 }
 
@@ -260,16 +267,15 @@ fn first_intersection_time(
     let two_b = (v0 - v1) * 2 + a0 - a1;
     let two_c = (p0 - p1) * 2;
 
-    let mut component_intersections: [Intersections; 3] =
-        unsafe { std::mem::uninitialized() };
-    component_intersections.iter_mut().set_from(
-        itertools::multizip((two_a.iter(), two_b.iter(), two_c.iter()))
-            .map(|(a, b, c)| solve_quadratic_positive(a, b, c)),
-    );
+    let component_intersections = (
+        solve_quadratic_positive(two_a.values[0], two_b.values[0], two_c.values[0]),
+        solve_quadratic_positive(two_a.values[1], two_b.values[1], two_c.values[1]),
+        solve_quadratic_positive(two_a.values[2], two_b.values[2], two_c.values[2]),
+        );
 
     let intersections = intersection_union(
-        intersection_union(component_intersections[0], component_intersections[1]),
-        component_intersections[2],
+        intersection_union(component_intersections.0, component_intersections.1),
+        component_intersections.2,
     );
 
     return match intersections {
@@ -292,8 +298,7 @@ fn lower_triangle_matrix_index(row: usize, col: usize) -> usize {
     row * (row - 1) / 2 + col
 }
 
-fn part2(positions: &[IntVec3], velocities: &[IntVec3], accelerations: &[IntVec3]) -> usize {
-    let intersect_start = time::Instant::now();
+fn get_all_intersections(positions: &[IntVec3], velocities: &[IntVec3], accelerations: &[IntVec3]) -> Vec<Option<IntType>> {
     let num_particles = positions.len();
     let mut intersect_time: Vec<Option<IntType>> = vec![None; lower_triangle_matrix_size(num_particles)];
     for row in 1..num_particles {
@@ -308,9 +313,13 @@ fn part2(positions: &[IntVec3], velocities: &[IntVec3], accelerations: &[IntVec3
                 accelerations[col]);
         }
     }
-    println!("compute intersection time: {}ms", duration_to_milliseconds(intersect_start.elapsed()));
+    return intersect_time;
+}
 
-    let filter_start = time::Instant::now();
+fn filter_colliding_particles(intersect_time: &mut [Option<IntType>]) -> usize {
+    let num_particles = (1 + ((1 + 8 * intersect_time.len()) as f64).sqrt() as usize) / 2;
+    assert!((num_particles * (num_particles - 1) / 2) == intersect_time.len());
+
     let mut remaining_particles = num_particles;
     let mut min_intersection_particles: Vec<usize> = Vec::with_capacity(num_particles);
     loop {
@@ -358,30 +367,35 @@ fn part2(positions: &[IntVec3], velocities: &[IntVec3], accelerations: &[IntVec3
                 }
             }
         } else {
-            println!("filter intersections: {}ms", duration_to_milliseconds(filter_start.elapsed()));
             return remaining_particles;
         }
     }
 }
 
-fn time_fn<F, T>(func: F) -> (T, f32)
-where
-    F: FnOnce() -> T,
-{
-    let start = time::Instant::now();
-    let result = func();
-    return (result, duration_to_milliseconds(start.elapsed()));
+fn part2(positions: &[IntVec3], velocities: &[IntVec3], accelerations: &[IntVec3]) -> usize {
+    let mut intersect_time = get_all_intersections(positions, velocities, accelerations);
+    return filter_colliding_particles(&mut intersect_time);
 }
 
-fn duration_to_milliseconds(t: time::Duration) -> f32 {
-    t.as_secs() as f32 * 1000.0f32 + t.subsec_nanos() as f32 * 1.0e-6f32
+#[bench]
+fn part2_bench(b: &mut Bencher) {
+    let (p, v, a) = get_input();
+    b.iter(|| {
+        test::black_box(part2(&p, &v, &a));
+    });
+}
+
+#[bench]
+fn intersection_bench(b: &mut Bencher) {
+    let (p, v, a) = get_input();
+    b.iter(|| {
+        test::black_box(get_all_intersections(&p, &v, &a));
+    });
 }
 
 fn main() {
     let (p, v, a) = get_input();
 
-    let (answer1, t1) = time_fn(|| part1(&p, &v, &a));
-    println!("Part 1: {} ({}ms)", answer1, t1);
-    let (answer2, t2) = time_fn(|| part2(&p, &v, &a));
-    println!("Part 2: {} ({}ms)", answer2, t2);
+    println!("Part 1: {}", part1(&p, &v, &a));
+    println!("Part 2: {}", part2(&p, &v, &a));
 }
