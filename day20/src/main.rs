@@ -7,6 +7,8 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::ops;
 use itertools::Itertools;
+use std::collections::HashSet;
+
 #[cfg(test)]
 use test::Bencher;
 
@@ -321,36 +323,22 @@ fn filter_colliding_particles(intersect_time: &mut [Option<IntType>]) -> usize {
     assert!((num_particles * (num_particles - 1) / 2) == intersect_time.len());
 
     let mut remaining_particles = num_particles;
-    let mut min_intersection_particles: Vec<usize> = Vec::with_capacity(num_particles);
+    let mut min_intersection_particles: HashSet<usize> = HashSet::new();
     loop {
         min_intersection_particles.clear();
-        let mut min_intersection_time: Option<IntType> = None;
+        let mut min_intersection_time: IntType = IntType::max_value();
         for row in 1..num_particles {
             for col in 0..row {
                 let i = lower_triangle_matrix_index(row, col);
-                match (min_intersection_time, intersect_time[i]) {
-                    (Some(min_t), Some(current_t)) => {
-                        if current_t <= min_t {
-                            if current_t < min_t {
-                                min_intersection_particles.clear();
-                            }
-                            if !min_intersection_particles.contains(&row) {
-                                min_intersection_particles.push(row);
-                            }
-                            if !min_intersection_particles.contains(&col) {
-                                min_intersection_particles.push(col);
-                            }
-                            min_intersection_time = Some(current_t)
+                if let Some(current_t) = intersect_time[i] {
+                    if current_t <= min_intersection_time {
+                        if current_t < min_intersection_time {
+                            min_intersection_particles.clear();
                         }
+                        min_intersection_particles.insert(row);
+                        min_intersection_particles.insert(col);
+                        min_intersection_time = current_t
                     }
-                    (None, Some(current_t)) => {
-                        assert!(min_intersection_particles.len() == 0);
-                        min_intersection_particles.push(row);
-                        min_intersection_particles.push(col);
-                        min_intersection_time = Some(current_t);
-                    }
-                    (_, None) => {}
-
                 }
             }
         }
