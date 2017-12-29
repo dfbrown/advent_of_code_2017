@@ -1,0 +1,9 @@
+[package]
+name = "day21"
+version = "0.1.0"
+authors = ["David Brown <david@dbrown.net>"]
+
+[dependencies]
+rand = "0.4"
+bit-vec = "0.4"
+
